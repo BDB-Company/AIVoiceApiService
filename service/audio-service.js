@@ -2,27 +2,32 @@ const rabbitMQConnection= require("../rabbitmq-connection");
 
 class AudioService {
 
-    async getAudioFileRabbit(language,gender,text){
+    async getAudioFileRabbit(language,gender,volume, speed, text){
 
+        const channel = await rabbitMQConnection.connection.createChannel();
         const queue = 'tts_requests'
         const data = {
             language:language,
             gender:gender,
-            text:text
+            volume:volume,
+            speed:speed,
+            text:text,
         }
 
-        await rabbitMQConnection.channel.assertQueue(queue, { durable: false });
+        await channel.assertQueue(queue, { durable: false });
 
-        rabbitMQConnection.channel.consume('amq.rabbitmq.reply-to', (msg) => {
-            // if (msg.properties.correlationId === corrId) {
-                return msg.content;
-        }, {noAck: true });
+        return new Promise((resolve, reject) => {
+            channel.consume('amq.rabbitmq.reply-to', async (msg) => {
+                resolve(msg.content);
+                channel.close();
+            }, {noAck: true});
 
-        rabbitMQConnection.channel.sendToQueue(
-            queue,
-            Buffer.from(JSON.stringify(data)),
-            { replyTo: 'amq.rabbitmq.reply-to'}
-        );
+            channel.sendToQueue(
+                queue,
+                Buffer.from(JSON.stringify(data)),
+                {replyTo: 'amq.rabbitmq.reply-to'}
+            );
+        })
     }
 }
 
